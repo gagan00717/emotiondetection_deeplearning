@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <title>Emotion Detection</title>
+
+    <style>
+
+        #video-container {
+
+            position: relative;
+
+            display: inline-block;
+
+        }
+
+ 
+
+        #video-overlay {
+
+            position: absolute;
+
+            top: 0;
+
+            left: 0;
+
+            border: 2px solid red;
+
+            color: white;
+
+            background-color: rgba(0, 0, 0, 0.7);
+
+            padding: 10px;
+
+            font-size: 20px;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <h1>Emotion Detection</h1>
+
+ 
+
+    <div id="video-container">
+
+        <video id="video" width="800" height="600" autoplay></video>
+
+        <canvas id="canvas" width="800" height="600"></canvas>
+
+        <div id="video-overlay"></div>
+
+    </div>
+
+ 
+
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="onOpenCvLoaded();" type="text/javascript"></script>
+
+ 
+
+    <script type="text/javascript">
+
+        let videoElement = document.getElementById("video");
+
+        let canvasElement = document.getElementById("canvas");
+
+        let overlayElement = document.getElementById("video-overlay");
+
+        let overlayTextElement = document.createElement("p");
+
+ 
+
+        let emotionLabels = ["Angry", "Disgusted", "Fearful", "Happy", "Neutral", "Sad", "Surprised"];
+
+ 
+
+        function onOpenCvLoaded() {
+
+            navigator.mediaDevices.getUserMedia({ video: true })
+
+                .then(function (stream) {
+
+                    videoElement.srcObject = stream;
+
+ 
+
+                    videoElement.addEventListener("loadedmetadata", function () {
+
+                        canvasElement.width = videoElement.videoWidth;
+
+                        canvasElement.height = videoElement.videoHeight;
+
+                    });
+
+ 
+
+                    startEmotionDetection();
+
+                })
+
+                .catch(function (error) {
+
+                    console.error("Error accessing the camera: ", error);
+
+                });
+
+        }
+
+ 
+
+        function startEmotionDetection() {
+
+            let faceCascade = new cv.CascadeClassifier();
+
+            faceCascade.load("haarcascade_frontalface_default.xml");
+
+ 
+
+            let grayMat = new cv.Mat();
+
+            let canvasContext = canvasElement.getContext("2d");
+
+ 
+
+            function processVideo() {
+
+                if (videoElement.paused || videoElement.ended) {
+
+                    return;
+
+                }
+
+ 
+
+                canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+                let srcMat = cv.imread(canvasElement);
+
+ 
+
+                cv.cvtColor(srcMat, grayMat, cv.COLOR_RGBA2GRAY);
+
+ 
+
+                let faces = new cv.RectVector();
+
+                let faceSize = new cv.Size(48, 48);
+
+                let faceNeighbors = 5;
+
+                faceCascade.detectMultiScale(grayMat, faces, 1.3, faceNeighbors, 0, faceSize);
+
+ 
+
+                for (let i = 0; i < faces.size(); ++i) {
+
+                    let faceRect = faces.get(i);
+
+                    let x = faceRect.x;
+
+                    let y = faceRect.y - 50;
+
+                    let w = faceRect.width;
+
+                    let h = faceRect.height + 10;
+
+ 
+
+                    cv.rectangle(srcMat, new cv.Point(x, y), new cv.Point(x + w, y + h), [255, 0, 0, 255], 2);
+
+ 
+
+                    let faceROI = grayMat.roi(faceRect);
+
+                    let resizedFaceROI = new cv.Mat();
+
+                    cv.resize(faceROI, resizedFaceROI, faceSize);
+
+ 
+
+                    let inputBlob = cv.blobFromImage(resizedFaceROI);
+
+                    model.setInput(inputBlob);
+
+                    let outputBlob = model.forward();
+
+ 
+
+                    let predictions = outputBlob.data32F;
+
+                    let maxIndex = predictions.indexOf(Math.max(...predictions));
+
+ 
+
+                    let emotion = emotionLabels[maxIndex];
+
+ 
+
+                    let overlayText = "Emotion: " + emotion;
+
+                    overlayTextElement.textContent = overlayText;
+
+                    overlayElement.style.display = "block";
+
+                    overlayElement.style.top = (y - 20) + "px";
+
+                    overlayElement.style.left = x + "px";
+
+                }
+
+ 
+
+                cv.imshow(canvasElement, srcMat);
+
+ 
+
+                requestAnimationFrame(processVideo);
+
+            }
+
+ 
+
+            overlayElement.appendChild(overlayTextElement);
+
+ 
+
+            requestAnimationFrame(processVideo);
+
+        }
+
+    </script>
+
+</body>
+
+</html>
